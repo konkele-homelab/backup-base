@@ -130,7 +130,7 @@ prune_by_timestamp() {
         file_ts="${file_ts//-/}"        # remove dashes
 
         if [ "$file_ts" -lt "$cutoff_ts" ]; then
-            if [ "${DRY_RUN:-false}" = "on" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
                 log "[DRY RUN] Would delete old backup: $f"
             else
                 log "Deleting old backup: $f"
