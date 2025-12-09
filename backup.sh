@@ -9,12 +9,12 @@ set -eu
 : "${RUN_LOG:=/tmp/backup_run_$$.log}"
 
 : "${MSMTP_CONFIG:=/etc/msmtp/msmtprc}"
-: "${EMAIL_ON_SUCCESS:=off}"
-: "${EMAIL_ON_FAILURE:=off}"
+: "${EMAIL_ON_SUCCESS:=false}"
+: "${EMAIL_ON_FAILURE:=false}"
 : "${EMAIL_TO:=admin@example.com}"
 
 : "${APP_BACKUP:=/default.sh}"
-: "${DRY_RUN:=off}"
+: "${DRY_RUN:=false}"
 : "${KEEP_DAYS:=30}"
 
 TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
@@ -48,9 +48,9 @@ send_email() {
     status="$2"
 
     send="no"
-    if [ "$status" = "success" ] && [ "$EMAIL_ON_SUCCESS" = "on" ]; then
+    if [ "$status" = "success" ] && [ "$EMAIL_ON_SUCCESS" = "true" ]; then
         send="yes"
-    elif [ "$status" = "failure" ] && [ "$EMAIL_ON_FAILURE" = "on" ]; then
+    elif [ "$status" = "failure" ] && [ "$EMAIL_ON_FAILURE" = "true" ]; then
         send="yes"
     fi
 
@@ -130,7 +130,7 @@ prune_by_timestamp() {
         file_ts="${file_ts//-/}"        # remove dashes
 
         if [ "$file_ts" -lt "$cutoff_ts" ]; then
-            if [ "${DRY_RUN:-off}" = "on" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
                 log "[DRY RUN] Would delete old backup: $f"
             else
                 log "Deleting old backup: $f"

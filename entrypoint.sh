@@ -61,6 +61,8 @@ fi
 # Generate msmtp config dynamically
 # ----------------------
 MSMTP_CONF="/etc/msmtp/msmtprc"
+MSMTP_LOG="/var/log/msmtp.log"
+
 mkdir -p -m 700 "$(dirname "$MSMTP_CONF")"
 
 AUTH_LINE="off"
@@ -82,7 +84,7 @@ defaults
 auth $AUTH_LINE
 tls $TLS_LINE
 tls_trust_file /etc/ssl/certs/ca-certificates.crt
-logfile /var/log/msmtp.log
+logfile $MSMTP_LOG
 
 account default
 host $SMTP_SERVER
@@ -93,13 +95,15 @@ passwordeval "$PASS_EVAL"
 EOF
 
 chmod 600 "$MSMTP_CONF"
+chown -R "$USER_UID:$USER_GID" "$(dirname "$MSMTP_CONF")"
 export MSMTP_CONFIG="$MSMTP_CONF"
 
 # ----------------------
-# Prepare log file
+# Prepare log files
 # ----------------------
-touch "$LOG_FILE"
-chown "$USER_UID:$USER_GID" "$LOG_FILE"
+touch "$LOG_FILE" "$MSMTP_LOG"
+chown "$USER_UID:$USER_GID" "$LOG_FILE" "$MSMTP_LOG"
+chmod 600 "$LOG_FILE" "$MSMTP_LOG"
 
 # ----------------------
 # Prepare backup destination

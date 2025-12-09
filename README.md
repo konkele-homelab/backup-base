@@ -25,16 +25,18 @@ pluggable backup scripts.
 
 | Variable          | Default                | Description |
 |-------------------|------------------------|-------------|
-| BACKUP_DEST       | `/backup`              |  Directory where backup output is stored |
-| LOG_FILE          | `/var/log/backup.log`  |  Persistent log file |
-| EMAIL_ON_SUCCESS  | `off`                  |  Enable sending email when backup succeeds (`on`/`off`) |
-| EMAIL_ON_FAILURE  | `off`                  |  Enable sending email when backup fails (`on`/`off`) |
-| EMAIL_TO          | `admin@example.com`    |  Recipient of status notifications |
-| MSMTP_CONFIG      | `/etc/msmtp/msmtprc`   |  Path to msmtp configuration file |
-| APP_BACKUP        | `/default.sh`          |  Path to backup script executed by the container |
-| KEEP_DAYS         | `30`                   |  Number of days to retain backups |
-| DRY_RUN           | `off`                  |  If `on`, prune logic logs actions but does not delete anything |
-| TZ                | `UTC`                  |  Timezone used for timestamps |
+| BACKUP_DEST       | `/backup`              | Directory where backup output is stored |
+| LOG_FILE          | `/var/log/backup.log`  | Persistent log file |
+| EMAIL_ON_SUCCESS  | `false`                | Enable sending email when backup succeeds (`true`/`false`) |
+| EMAIL_ON_FAILURE  | `false`                | Enable sending email when backup fails (`true`/`false`) |
+| EMAIL_TO          | `admin@example.com`    | Recipient of status notifications |
+| EMAIL_FROM        | `backup@example.com`   | Sender of status notifications |
+| APP_BACKUP        | `/default.sh`          | Path to backup script executed by the container |
+| KEEP_DAYS         | `30`                   | Number of days to retain backups |
+| USER_UID          | `3000`                 | UID of backup user |
+| USER_GID          | `3000`                 | GID of backup user |
+| DRY_RUN           | `false`                | If `true`, prune logic logs actions but does not delete anything |
+| TZ                | `UTC`                  | Timezone used for timestamps |
 
 ---
 
