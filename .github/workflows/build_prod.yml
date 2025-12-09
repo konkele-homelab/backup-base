@@ -1,4 +1,4 @@
-name: Update Tags, Build & Push Production Image and Notify Downstream
+name: Update Tags, Build & Push Production Image, and Notify Downstream
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
     runs-on: [self-hosted]
     needs: version
     env:
-      APP: ${{ github.repository }}
+      APP: ${{ github.event.repository.name }}
       NEW_TAG: ${{ needs.version.outputs.new_tag }}
 
     steps:
@@ -84,12 +84,12 @@ jobs:
       ORG: ${{ github.repository_owner }}
       TOPIC_FILTER: backup-utility
       EVENT_NAME: base_image_updated
+      UPSTREAM_TAG: ${{ needs.version.outputs.new_tag }}
+      TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
 
     steps:
       - name: List repositories in org
         id: list
-        env:
-          TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
         run: |
           curl -s \
             -H "Authorization: token $TOKEN" \
@@ -102,16 +102,13 @@ jobs:
           echo "repos=$(jq -Rsc 'split(\"\n\")[:-1]' <<< \"$matched\")" >> $GITHUB_OUTPUT
 
       - name: Trigger repository_dispatch on downstream repos
-        env:
-          TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
-          EVENT_NAME: ${{ env.EVENT_NAME }}
         run: |
           repos=$(jq -r '.[]' <<< "${{ steps.list.outputs.repos }}")
           for repo in $repos; do
-            echo "Notifying $repo..."
+            echo "Notifying $repo with upstream tag $UPSTREAM_TAG..."
             curl -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: token ${TOKEN}" \
               https://api.github.com/repos/${repo}/dispatches \
-              -d "{\"event_type\": \"${EVENT_NAME}\", \"client_payload\": {\"upstream_tag\": \"${NEW_TAG}\"}}"
+              -d "{\"event_type\": \"${EVENT_NAME}\", \"client_payload\": {\"upstream_tag\": \"${UPSTREAM_TAG}\"}}"
           done
