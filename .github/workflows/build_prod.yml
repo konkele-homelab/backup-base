@@ -120,8 +120,8 @@ jobs:
       ORG: ${{ github.repository_owner }}
       TOPIC_FILTER: backup-utility
       EVENT_NAME: base_image_updated
-      UPSTREAM_TAG: ${{ needs.version.outputs.new_tag }}
       TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+      FULL: ${{ needs.version.outputs.full }}
 
     steps:
       - name: Notify downstream repositories
@@ -151,12 +151,12 @@ jobs:
           done
 
           # Convert array to JSON for GitHub Actions output
-          json_array=$(printf '%s\n' "${repos[@]}" | jq -R . | jq -s .)
-          echo "repos=$json_array" >> $GITHUB_OUTPUT
+          json_array=$(printf '%s\n' "${repos[@]}" | jq -R . | jq -s -c .)
+          echo "repos=$json_array" >> "$GITHUB_OUTPUT"
 
           # Trigger repository_dispatch for each downstream repo
           for repo in "${repos[@]}"; do
-            echo "Notifying $repo with upstream tag $UPSTREAM_TAG..."
+            echo "Notifying $repo with upstream tag $FULL..."
             curl -s -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: token $TOKEN" \
