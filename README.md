@@ -37,7 +37,7 @@ pluggable backup scripts.
 | USER_UID          | `3000`                 | UID of backup user |
 | USER_GID          | `3000`                 | GID of backup user |
 | DRY_RUN           | `false`                | If `true`, prune logic logs actions but does not delete anything |
-| TZ                | `UTC`                  | Timezone used for timestamps |
+| TZ                | `America/Chicago`      | Timezone used for timestamps |
 
 ---
 
