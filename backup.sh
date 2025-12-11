@@ -47,6 +47,8 @@ send_email() {
     subject="$1"
     status="$2"
 
+    [ -n "${APP_NAME:-}" ] && subject="${APP_NAME} ${subject}"
+
     send="no"
     if [ "$status" = "success" ] && [ "$EMAIL_ON_SUCCESS" = "true" ]; then
         send="yes"
@@ -153,14 +155,14 @@ fi
 if [ -x "$APP_BACKUP" ]; then
     if . "$APP_BACKUP"; then
         log "Backup completed successfully."
-        send_email "Backup Succeeded at $(date '+%Y-%m-%d %H:%M:%S')" "success"
+        send_email "Backup Succeeded" "success"
     else
         log_error "Backup script failed."
-        send_email "Backup Failed at $(date '+%Y-%m-%d %H:%M:%S')" "failure"
+        send_email "Backup Failed" "failure"
         exit 1
     fi
 else
     log_error "Backup script not found or not executable: $APP_BACKUP"
-    send_email "Backup Failed at $(date '+%Y-%m-%d %H:%M:%S')" "failure"
+    send_email "Backup Failed" "failure"
     exit 1
 fi

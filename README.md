@@ -31,6 +31,7 @@ pluggable backup scripts.
 | EMAIL_ON_FAILURE  | `false`                | Enable sending email when backup fails (`true`/`false`) |
 | EMAIL_TO          | `admin@example.com`    | Recipient of status notifications |
 | EMAIL_FROM        | `backup@example.com`   | Sender of status notifications |
+| APP_NAME          | `unset`                | Application name in status notification (optional) |
 | APP_BACKUP        | `/default.sh`          | Path to backup script executed by the container |
 | KEEP_DAYS         | `30`                   | Number of days to retain backups |
 | USER_UID          | `3000`                 | UID of backup user |
