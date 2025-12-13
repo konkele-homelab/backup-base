@@ -16,9 +16,6 @@ set -eu
 : "${APP_BACKUP:=/default.sh}"
 : "${DRY_RUN:=false}"
 
-: "${APP_NAME:=BackupJob}"
-export APP_NAME
-
 ###############################################################################
 # Cleanup
 ###############################################################################
@@ -57,7 +54,9 @@ send_email() {
     subject="$1"
     status="$2"
 
-    [ -n "$APP_NAME" ] && subject="${APP_NAME} ${subject}"
+    app_name="${APP_NAME:-BackupJob}"
+
+    subject="${app_name} ${subject}"
 
     case "$status:$EMAIL_ON_SUCCESS:$EMAIL_ON_FAILURE" in
         success:true:*) ;;
