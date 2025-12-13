@@ -31,12 +31,13 @@ pluggable backup scripts.
 | EMAIL_ON_FAILURE  | `false`                | Enable sending email when backup fails (`true`/`false`) |
 | EMAIL_TO          | `admin@example.com`    | Recipient of status notifications |
 | EMAIL_FROM        | `backup@example.com`   | Sender of status notifications |
+| APP_NAME          | `unset`                | Application name in status notification (optional) |
 | APP_BACKUP        | `/default.sh`          | Path to backup script executed by the container |
 | KEEP_DAYS         | `30`                   | Number of days to retain backups |
 | USER_UID          | `3000`                 | UID of backup user |
 | USER_GID          | `3000`                 | GID of backup user |
 | DRY_RUN           | `false`                | If `true`, prune logic logs actions but does not delete anything |
-| TZ                | `UTC`                  | Timezone used for timestamps |
+| TZ                | `America/Chicago`      | Timezone used for timestamps |
 
 ---
 
