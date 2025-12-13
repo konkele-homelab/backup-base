@@ -28,8 +28,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Bump version and push tag
         id: tag_version
@@ -90,8 +88,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           platforms: linux/amd64
-          provenance: false
-          sbom: false
           labels: |
             org.opencontainers.image.created=${{ github.run_started_at }}
             org.opencontainers.image.revision=${{ github.sha }}
