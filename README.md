@@ -1,138 +1,186 @@
 # Generic Backup Base Image
 
-This repository provides a lightweight, extensible Docker image that
-serves as a **base layer for application-specific backup containers**.
-It includes a robust backup framework with logging, retention pruning,
-optional email notifications, and a standardized execution model for
-pluggable backup scripts.
+This repository provides a reusable Docker base image for application backup containers.
+It includes a framework for:
+
+- Structured snapshot creation
+- Pluggable retention policies
+- Logging and run log aggregation
+- Email notifications (optional)
+- A simple wrapper execution model
+
+This base image does **not perform an application backup on its own** — it must be extended by a child image that provides an app‑specific backup script.
 
 ---
 
-## Features
+## Architectural Components
 
--   Provides a **general-purpose backup execution framework**
--   Supports **custom backup scripts** via `APP_BACKUP`
--   Email notification support (success and failure)
--   Automatic pruning of old backups using timestamp parsing
--   Runs as a non-root user with configurable UID/GID
--   Fully environment-driven configuration
--   Clean, isolated logs (run log + persistent log)
--   Lightweight Alpine base image
+```
+entrypoint.sh  (root init + exec)
+    |
+    v
+backup.sh     (wrapper / orchestrator)
+    |
+    +-- sources backup_common.sh (core helpers)
+    |
+    +-- sources $APP_BACKUP     (app-specific logic)
+```
+
+### entrypoint.sh
+
+- Runs as root
+- Performs initial container setup (permissions, UID/GID)
+- Executes `backup.sh` as a non‑root user
+
+### backup.sh
+
+The wrapper script:
+- Defines logging (`log`, `log_error`)
+- Manages run logs and cleanup
+- Sources `backup_common.sh`
+- Sources the application backup script (`APP_BACKUP`)
+- Handles email notifications based on backup outcome
+
+### backup_common.sh
+
+A shared library (sourced, not executed) that provides:
+
+- Snapshot helpers
+- Retention engine
+- Pluggable policies (GFS, FIFO, Calendar)
+- No email or lifecycle logic (delegated to wrapper)
+
+### APP_BACKUP
+
+An executable script provided by extending images that:
+
+- Defines what to back up
+- Uses helpers from `backup_common.sh`
+- Calls snapshot and retention logic
+
+---
+
+## Snapshot Directory Layout (GFS)
+
+When using the **GFS retention policy**, backups are stored as independent snapshot tiers:
+
+```
+/backup
+├── daily/
+│   ├── 2025-12-01_02-00-00/
+│   └── ...
+├── weekly/
+│   ├── 2025-12-07_02-00-00/
+│   └── ...
+├── monthly/
+│   ├── 2025-12-01_02-00-00/
+│   └── ...
+├── latest -> daily/2025-12-08_02-00-00
+└── logs/
+    ├── backup.log
+    └── ...
+```
+
+Notes:
+
+- `daily/` contains a snapshot for every backup run
+- `weekly/` contains hard‑linked snapshots promoted on Sundays
+- `monthly/` contains hard‑linked snapshots promoted on the 1st of the month
+- `latest` always points to the most recent daily snapshot
+- Weekly and monthly snapshots are **not nested** inside daily
+
+---
+
+## Retention Policies
+
+Retention behavior is controlled via environment variables.
+
+### GFS (default)
+
+```
+RETENTION_POLICY=gfs
+GFS_DAILY=7
+GFS_WEEKLY=4
+GFS_MONTHLY=6
+```
+
+Retention rules:
+
+- Daily snapshots older than `GFS_DAILY` days are pruned
+- Weekly snapshots older than `GFS_WEEKLY × 7` days are pruned
+- Monthly snapshots older than `GFS_MONTHLY × 31` days are pruned
+
+### FIFO
+
+```
+RETENTION_POLICY=fifo
+FIFO_COUNT=14
+```
+
+Keeps only the newest `FIFO_COUNT` snapshots in `daily/`.
+
+### Calendar
+
+```
+RETENTION_POLICY=calendar
+CALENDAR_DAYS=30
+```
+
+Deletes snapshots older than `CALENDAR_DAYS` regardless of tier.
 
 ---
 
 ## Environment Variables
 
-| Variable          | Default                | Description |
-|-------------------|------------------------|-------------|
-| BACKUP_DEST       | `/backup`              | Directory where backup output is stored |
-| LOG_FILE          | `/var/log/backup.log`  | Persistent log file |
-| EMAIL_ON_SUCCESS  | `false`                | Enable sending email when backup succeeds (`true`/`false`) |
-| EMAIL_ON_FAILURE  | `false`                | Enable sending email when backup fails (`true`/`false`) |
-| EMAIL_TO          | `admin@example.com`    | Recipient of status notifications |
-| EMAIL_FROM        | `backup@example.com`   | Sender of status notifications |
-| APP_NAME          | `unset`                | Application name in status notification (optional) |
-| APP_BACKUP        | `/default.sh`          | Path to backup script executed by the container |
-| KEEP_DAYS         | `30`                   | Number of days to retain backups |
-| USER_UID          | `3000`                 | UID of backup user |
-| USER_GID          | `3000`                 | GID of backup user |
-| DRY_RUN           | `false`                | If `true`, prune logic logs actions but does not delete anything |
-| TZ                | `America/Chicago`      | Timezone used for timestamps |
+| Variable | Default | Description |
+|--------|---------|-------------|
+| BACKUP_DEST | `/backup` | Root backup directory |
+| APP_BACKUP | `/default.sh` | Application backup script |
+| DRY_RUN | `false` | Log actions without modifying data |
+| RETENTION_POLICY | `gfs` | `gfs`, `fifo`, or `calendar` |
+| GFS_DAILY | `7` | Daily snapshot retention |
+| GFS_WEEKLY | `4` | Weekly snapshot retention |
+| GFS_MONTHLY | `6` | Monthly snapshot retention |
+| FIFO_COUNT | `14` | FIFO retention count |
+| CALENDAR_DAYS | `30` | Calendar retention window |
+| LOG_FILE | `/var/log/backup.log` | Persistent log file |
+| EMAIL_ON_SUCCESS | `false` | Email on successful backup |
+| EMAIL_ON_FAILURE | `false` | Email on failed backup |
+| EMAIL_TO | `admin@example.com` | Email recipient |
 
 ---
 
-## How Application-Specific Images Extend This Base Image
+## Example Application Backup Script
 
-Child images typically:
-
-1.  **Copy their backup script** into `/config/app-backup.sh`
-2.  **Set `APP_BACKUP` to point to it**
-3.  Optionally add environment variables or additional tooling
-
-Example Dockerfile for an extending image:
-
-``` dockerfile
-FROM your-org/backup-base:latest
-
-COPY myapp-backup.sh /config/myapp-backup.sh
-ENV APP_BACKUP=/config/myapp-backup.sh
-```
-
----
-
-## Backup Script Requirements for Extending Images
-
-A custom backup script must:
-
--   Be an executable file
--   Return exit code `0` on success and non-zero on failure
--   Produce output in `$BACKUP_DEST` (recommended)
--   Log using `log` or simply print lines (captured automatically)
-
-The base container handles:
-
--   Timestamps
--   Error handling
--   Logging aggregation
--   Email notifications
--   Pruning
-
-Example minimal extension script:
-
-``` sh
+```sh
 #!/bin/sh
-set -eu
+set -e
 
-OUT="$BACKUP_DEST/myapp_backup_$(date '+%Y-%m-%d_%H-%M-%S').tar.gz"
+snapshot="$BACKUP_DEST/daily/$TIMESTAMP"
 
-tar -czf "$OUT" /data/myapp
+create_snapshot_dir "$snapshot"
+
+rsync -aH --delete   --link-dest="$BACKUP_DEST/latest"   "$BACKUP_SRC/" "$snapshot/"
+
+update_latest_symlink "daily/$(basename "$snapshot")"
+
+maybe_create_weekly "$snapshot"
+maybe_create_monthly "$snapshot"
+
+apply_retention
 ```
-
----
-
-## Docker Compose Example
-
-``` yaml
-version: "3.9"
-
-services:
-  backup-base-example:
-    image: your-dockerhub-username/backup-base:latest
-    environment:
-      BACKUP_DEST: /backup
-      APP_BACKUP: /config/app-backup.sh
-      KEEP_DAYS: 30
-      EMAIL_ON_FAILURE: "on"
-    volumes:
-      - /backup:/backup
-      - ./app-backup.sh:/config/app-backup.sh
-```
-
----
-
-## Logging
-
-The base image produces:
-
--   **Persistent Log:** `/var/log/backup.log`
--   **Per-run Log:** Temporary file printed at the end and used for
-    email bodies
-
-Includes:
-
--   Backup start/end timestamps
--   Script output
--   Prune operations
--   Errors and failures
 
 ---
 
 ## Notes
 
--   If `APP_BACKUP` remains `default.sh`, the container exits cleanly
-    with a notice.
--   msmtp must be configured if email alerts are enabled.
--   Backup scripts should be deterministic and return meaningful exit
-    codes.
--   This base image is intended to be extended --- it does not perform
-    any application backup on its own.
+- If `APP_BACKUP` points to `default.sh`, the container exits with a notice
+- Email notifications require valid msmtp configuration
+- Backup scripts should return meaningful exit codes
+- The base image is designed to be extended
+
+---
+
+## License
+
+MIT
