@@ -44,13 +44,10 @@ log_error() {
 # Load common backup library
 ###############################################################################
 COMMON_LIB="/usr/local/lib/backup_common.sh"
-
 if [ ! -r "$COMMON_LIB" ]; then
     log_error "backup_common.sh not found at $COMMON_LIB"
     exit 1
 fi
-
-# shellcheck source=/usr/local/lib/backup_common.sh
 . "$COMMON_LIB"
 
 ###############################################################################
@@ -76,6 +73,13 @@ send_email() {
 }
 
 ###############################################################################
+# Create snapshot directory
+###############################################################################
+TIMESTAMP=$(_now_ts)
+SNAPSHOT_DIR="$BACKUP_DEST/daily/$TIMESTAMP"
+create_snapshot_dir "$SNAPSHOT_DIR"
+
+###############################################################################
 # Execute application backup
 ###############################################################################
 if [ "${APP_BACKUP##*/}" = "default.sh" ]; then
@@ -91,8 +95,18 @@ fi
 
 log "Starting application backup: $APP_BACKUP"
 
+# Provide SNAPSHOT_DIR to app script
+export SNAPSHOT_DIR
+
 if . "$APP_BACKUP"; then
     log "Backup completed successfully"
+
+    # Update latest symlink
+    update_latest_symlink "daily/$TIMESTAMP"
+
+    # Apply retention based on configured policy
+    apply_retention
+
     send_email "Backup Succeeded" "success"
 else
     log_error "Backup script failed"

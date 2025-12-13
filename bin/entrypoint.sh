@@ -115,4 +115,4 @@ chown "$USER_UID:$USER_GID" "$BACKUP_DEST"
 # ----------------------
 # Execute backup as non-root user
 # ----------------------
-exec su-exec "$USER_UID:$USER_GID" /config/backup.sh
+exec su-exec "$USER_UID:$USER_GID" backup.sh

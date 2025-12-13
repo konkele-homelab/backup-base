@@ -11,18 +11,16 @@ RUN apk add --no-cache \
         tzdata \
     && update-ca-certificates
 
-# Set working directory
-WORKDIR /config
-
 # Create backup user
 RUN addgroup -g 3000 backup \
     && adduser -D -u 3000 -G backup -s /bin/sh backup
 
 # Copy scripts
-COPY entrypoint.sh backup.sh /config/
+COPY bin/ /usr/local/bin/
+COPY lib/ /usr/local/lib/
 
 # Make scripts executable
-RUN chmod +x /config/*.sh
+RUN chmod +x /usr/local/bin/*.sh /usr/local/lib/*.sh
 
 # Entrypoint
-ENTRYPOINT ["/config/entrypoint.sh"]
+ENTRYPOINT ["entrypoint.sh"]

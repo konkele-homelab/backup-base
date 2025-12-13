@@ -1,9 +1,8 @@
 #!/bin/sh
 # -----------------------------------------------------------------------------
-# backup_common.sh
-#
+# backup_common.sh v2.3
 # Common snapshot + retention engine.
-# Intended to be sourced by backup.sh wrapper and app-specific backup scripts.
+# Handles GFS/FIFO/Calendar retention safely in POSIX shells.
 # -----------------------------------------------------------------------------
 
 # Guard against direct execution
@@ -36,15 +35,15 @@ _now_ts() {
 }
 
 _numeric_ts() {
-    # Convert YYYY-MM-DD_HH-MM-SS → YYYYMMDDHHMMSS
-    printf '%s\n' "$1" | tr -d '-_'
+    # Convert YYYY-MM-DD_HH-MM-SS → YYYYMMDDHHMMSS, digits only
+    printf '%s\n' "$1" | tr -cd '0-9'
 }
 
 _cutoff_ts_days_ago() {
     days="$1"
     date -d "$days days ago" +%Y%m%d%H%M%S 2>/dev/null \
         || date -v -"${days}"d +%Y%m%d%H%M%S 2>/dev/null \
-        || return 1
+        || { echo "$(date +%Y%m%d%H%M%S)"; return 1; }
 }
 
 ###############################################################################
@@ -106,10 +105,9 @@ _retention_fifo() {
 
     log "Applying FIFO retention (keep=$FIFO_COUNT)"
 
-    set -- "$dir"/*
-    [ -e "$1" ] || return 0
+    [ -d "$dir" ] || return 0
 
-    count=$(ls -1 "$dir" | wc -l | tr -d ' ')
+    count=$(ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ')
     excess=$((count - FIFO_COUNT))
 
     [ "$excess" -le 0 ] && return 0
@@ -133,7 +131,7 @@ _retention_calendar() {
 }
 
 ###############################################################################
-# Core pruning primitive
+# Core pruning primitive (safe numeric comparisons)
 ###############################################################################
 _prune_by_days() {
     dir="$1"
@@ -156,7 +154,15 @@ _prune_by_days() {
 
         num=$(_numeric_ts "$ts")
 
-        if [ "$num" -lt "$cutoff" ]; then
+        # Skip if num is empty
+        [ -z "$num" ] && continue
+
+        # Safe numeric comparison
+        case "$num" in
+            *[!0-9]*) continue ;;  # skip invalid numbers
+        esac
+
+        if [ "$num" -lt "$cutoff" ] 2>/dev/null; then
             if [ "$DRY_RUN" = "true" ]; then
                 log "[DRY-RUN] would delete $path"
             else
