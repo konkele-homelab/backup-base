@@ -2,6 +2,11 @@ name: Build & Push Development Image
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag for this build (defaults to dev)'
+        required: false
+        default: 'dev'
 
 permissions:
   contents: read
@@ -11,6 +16,7 @@ jobs:
     runs-on: [self-hosted]
     env:
       APP: ${{ github.event.repository.name }}
+      IMAGE_TAG: ${{ github.event.inputs.image_tag }}
 
     steps:
       # Checkout source code
@@ -25,13 +31,13 @@ jobs:
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASS }}
 
-      # Build and push Docker image (always tagged 'dev')
+      # Build and push Docker image with configurable tag
       - name: Build and Push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ secrets.REGISTRY }}/${{ env.APP }}:dev
+          tags: ${{ secrets.REGISTRY }}/${{ env.APP }}:${{ env.IMAGE_TAG }}
           platforms: linux/amd64
           provenance: false
           sbom: false
@@ -39,4 +45,4 @@ jobs:
             org.opencontainers.image.created=${{ github.run_started_at }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.repository }}
-            org.opencontainers.image.version=dev
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}

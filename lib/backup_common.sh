@@ -1,6 +1,6 @@
 #!/bin/sh
 # -----------------------------------------------------------------------------
-# backup_common.sh v2.3
+# backup_common.sh v2.4
 # Common snapshot + retention engine.
 # Handles GFS/FIFO/Calendar retention safely in POSIX shells.
 # -----------------------------------------------------------------------------
@@ -9,9 +9,9 @@
 [ "${BACKUP_COMMON_LOADED:-}" = "true" ] && return 0
 BACKUP_COMMON_LOADED=true
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # Defaults (override via environment)
-###############################################################################
+# -----------------------------------------------------------------------------
 : "${BACKUP_DEST:=/backup}"
 : "${RETENTION_POLICY:=gfs}"        # gfs | fifo | calendar
 : "${DRY_RUN:=false}"
@@ -27,9 +27,9 @@ BACKUP_COMMON_LOADED=true
 # Calendar defaults
 : "${CALENDAR_DAYS:=30}"
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # Internal helpers
-###############################################################################
+# -----------------------------------------------------------------------------
 _now_ts() {
     date '+%Y-%m-%d_%H-%M-%S'
 }
@@ -46,9 +46,9 @@ _cutoff_ts_days_ago() {
         || { echo "$(date +%Y%m%d%H%M%S)"; return 1; }
 }
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # Snapshot helpers
-###############################################################################
+# -----------------------------------------------------------------------------
 create_snapshot_dir() {
     snapshot_dir="$1"
 
@@ -71,9 +71,9 @@ update_latest_symlink() {
     ( cd "$BACKUP_DEST" && ln -sfn "$target" latest )
 }
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # Retention dispatch
-###############################################################################
+# -----------------------------------------------------------------------------
 apply_retention() {
     case "$RETENTION_POLICY" in
         gfs)       _retention_gfs ;;
@@ -86,9 +86,9 @@ apply_retention() {
     esac
 }
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # GFS retention
-###############################################################################
+# -----------------------------------------------------------------------------
 _retention_gfs() {
     log "Applying GFS retention (daily=$GFS_DAILY weekly=$GFS_WEEKLY monthly=$GFS_MONTHLY)"
 
@@ -97,9 +97,9 @@ _retention_gfs() {
     _prune_by_days "$BACKUP_DEST/monthly" "$((GFS_MONTHLY * 31))"
 }
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # FIFO retention
-###############################################################################
+# -----------------------------------------------------------------------------
 _retention_fifo() {
     dir="$BACKUP_DEST/daily"
 
@@ -122,17 +122,17 @@ _retention_fifo() {
     done
 }
 
-###############################################################################
+# -----------------------------------------------------------------------------
 # Calendar retention
-###############################################################################
+# -----------------------------------------------------------------------------
 _retention_calendar() {
     log "Applying calendar retention (days=$CALENDAR_DAYS)"
     _prune_by_days "$BACKUP_DEST/daily" "$CALENDAR_DAYS"
 }
 
-###############################################################################
-# Core pruning primitive (safe numeric comparisons)
-###############################################################################
+# -----------------------------------------------------------------------------
+# Core pruning primitive
+# -----------------------------------------------------------------------------
 _prune_by_days() {
     dir="$1"
     keep_days="$2"
@@ -173,27 +173,81 @@ _prune_by_days() {
     done
 }
 
-###############################################################################
-# Weekly / Monthly snapshot helpers (used by app scripts)
-###############################################################################
-maybe_create_weekly() {
+# -----------------------------------------------------------------------------
+# GFS snapshot promotion helpers
+# -----------------------------------------------------------------------------
+
+create_gfs_snapshots() {
     src="$1"
-    dest="$BACKUP_DEST/weekly/$(_now_ts)"
 
-    [ "$(date +%u)" -ne 7 ] && return 0
+    [ "$RETENTION_POLICY" = "gfs" ] || return 0
 
-    log "Creating weekly snapshot"
-    [ "$DRY_RUN" = "true" ] && log "[DRY-RUN] would cp -al $src $dest" \
-        || cp -al "$src" "$dest"
+    _maybe_snapshot_weekly  "$src"
+    _maybe_snapshot_monthly "$src"
 }
 
-maybe_create_monthly() {
+_maybe_snapshot_weekly() {
     src="$1"
-    dest="$BACKUP_DEST/monthly/$(_now_ts)"
 
-    [ "$(date +%d)" != "01" ] && return 0
+    [ "$(date +%u)" = "7" ] || return 0
 
-    log "Creating monthly snapshot"
-    [ "$DRY_RUN" = "true" ] && log "[DRY-RUN] would cp -al $src $dest" \
-        || cp -al "$src" "$dest"
+    base="$BACKUP_DEST/weekly"
+    key="$(date +%Y-%m-%d)"
+    dest="$base/$(_now_ts)"
+
+    _maybe_snapshot "$src" "$base" "$key" "$dest"
+}
+
+_maybe_snapshot_monthly() {
+    src="$1"
+
+    [ "$(date +%d)" = "01" ] || return 0
+
+    base="$BACKUP_DEST/monthly"
+    key="$(date +%Y-%m)"
+    dest="$base/$(_now_ts)"
+
+    _maybe_snapshot "$src" "$base" "$key" "$dest"
+}
+
+_maybe_snapshot() {
+    src="$1"
+    base="$2"
+    key="$3"
+    dest="$4"
+
+    [ -d "$src" ] || {
+        log_error "Snapshot source missing: $src"
+        return 1
+    }
+
+    if [ ! -d "$base" ]; then
+        if [ "$DRY_RUN" = "true" ]; then
+            log "[DRY-RUN] would mkdir -p $base"
+        else
+            mkdir -p "$base"
+        fi
+    fi
+
+    for d in "$base"/*; do
+        [ -e "$d" ] || break
+        case "${d##*/}" in
+            "$key"_*) return 0 ;;
+        esac
+    done
+
+    _create_linked_snapshot "$src" "$dest"
+}
+
+_create_linked_snapshot() {
+    src="$1"
+    dest="$2"
+
+    log "Creating snapshot: $dest"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        log "[DRY-RUN] would cp -al $src $dest"
+    else
+        cp -al "$src" "$dest"
+    fi
 }
