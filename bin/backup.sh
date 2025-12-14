@@ -17,12 +17,25 @@ set -eu
 : "${DRY_RUN:=false}"
 
 # ----------------------
+# Failure state
+# ----------------------
+BACKUP_FAILED=false
+
+# ----------------------
 # Cleanup
 # ----------------------
 cleanup() {
     rm -f "$RUN_LOG"
 }
 trap cleanup EXIT
+
+# ----------------------
+# Failure trap (guaranteed email on unexpected exit)
+# ----------------------
+trap '
+    BACKUP_FAILED=true
+    send_email "Backup Failed" "failure"
+' ERR
 
 # ----------------------
 # Logging
@@ -43,6 +56,7 @@ log_error() {
 COMMON_LIB="/usr/local/lib/backup_common.sh"
 if [ ! -r "$COMMON_LIB" ]; then
     log_error "backup_common.sh not found at $COMMON_LIB"
+    BACKUP_FAILED=true
     exit 1
 fi
 . "$COMMON_LIB"
@@ -55,7 +69,6 @@ send_email() {
     status="$2"
 
     app_name="${APP_NAME:-BackupJob}"
-
     subject="${app_name} ${subject}"
 
     case "$status:$EMAIL_ON_SUCCESS:$EMAIL_ON_FAILURE" in
@@ -88,7 +101,7 @@ fi
 
 if [ ! -x "$APP_BACKUP" ]; then
     log_error "Backup script not executable: $APP_BACKUP"
-    send_email "Backup Failed" "failure"
+    BACKUP_FAILED=true
     exit 1
 fi
 
@@ -112,6 +125,6 @@ if . "$APP_BACKUP"; then
     send_email "Backup Succeeded" "success"
 else
     log_error "Backup script failed"
-    send_email "Backup Failed" "failure"
+    BACKUP_FAILED=true
     exit 1
 fi
