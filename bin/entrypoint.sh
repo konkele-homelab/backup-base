@@ -6,6 +6,8 @@ set -eu
 # ----------------------
 : "${TZ:=America/Chicago}"
 
+: "${RUN_AS_ROOT:=false}"
+
 : "${SCRIPT_USER:=backup}"
 : "${USER_UID:=3000}"
 : "${USER_GID:=3000}"
@@ -33,27 +35,29 @@ if [ -n "${TZ:-}" ]; then
 fi
 
 # ----------------------
-# Configure Non-Root User
+# Configure user (ONLY if not running as root)
 # ----------------------
-# Ensure group exists and has correct GID
-if ! getent group "$SCRIPT_USER" >/dev/null 2>&1; then
-    addgroup -g "$USER_GID" "$SCRIPT_USER"
-else
-    CURRENT_GID=$(getent group "$SCRIPT_USER" | cut -d: -f3)
-    if [ "$CURRENT_GID" != "$USER_GID" ]; then
-        delgroup "$SCRIPT_USER"
+if [ "$RUN_AS_ROOT" != "true" ]; then
+    # Ensure group exists and has correct GID
+    if ! getent group "$SCRIPT_USER" >/dev/null 2>&1; then
         addgroup -g "$USER_GID" "$SCRIPT_USER"
+    else
+        CURRENT_GID=$(getent group "$SCRIPT_USER" | cut -d: -f3)
+        if [ "$CURRENT_GID" != "$USER_GID" ]; then
+            delgroup "$SCRIPT_USER"
+            addgroup -g "$USER_GID" "$SCRIPT_USER"
+        fi
     fi
-fi
 
-# Ensure user exists and has correct UID/GID
-if ! id "$SCRIPT_USER" >/dev/null 2>&1; then
-    adduser -D -u "$USER_UID" -G "$SCRIPT_USER" -s /bin/sh "$SCRIPT_USER"
-else
-    CURRENT_UID=$(id -u "$SCRIPT_USER")
-    if [ "$CURRENT_UID" != "$USER_UID" ]; then
-        deluser "$SCRIPT_USER"
+    # Ensure user exists and has correct UID/GID
+    if ! id "$SCRIPT_USER" >/dev/null 2>&1; then
         adduser -D -u "$USER_UID" -G "$SCRIPT_USER" -s /bin/sh "$SCRIPT_USER"
+    else
+        CURRENT_UID=$(id -u "$SCRIPT_USER")
+        if [ "$CURRENT_UID" != "$USER_UID" ]; then
+            deluser "$SCRIPT_USER"
+            adduser -D -u "$USER_UID" -G "$SCRIPT_USER" -s /bin/sh "$SCRIPT_USER"
+        fi
     fi
 fi
 
@@ -95,24 +99,38 @@ passwordeval "$PASS_EVAL"
 EOF
 
 chmod 600 "$MSMTP_CONF"
-chown -R "$USER_UID:$USER_GID" "$(dirname "$MSMTP_CONF")"
+
+if [ "$RUN_AS_ROOT" != "true" ]; then
+    chown -R "$USER_UID:$USER_GID" "$(dirname "$MSMTP_CONF")"
+fi
+
 export MSMTP_CONFIG="$MSMTP_CONF"
 
 # ----------------------
 # Prepare log files
 # ----------------------
 touch "$LOG_FILE" "$MSMTP_LOG"
-chown "$USER_UID:$USER_GID" "$LOG_FILE" "$MSMTP_LOG"
 chmod 600 "$LOG_FILE" "$MSMTP_LOG"
+
+if [ "$RUN_AS_ROOT" != "true" ]; then
+    chown "$USER_UID:$USER_GID" "$LOG_FILE" "$MSMTP_LOG"
+fi
 
 # ----------------------
 # Prepare backup destination
 # ----------------------
 mkdir -p "$BACKUP_DEST"
 chmod 700 "$BACKUP_DEST"
-chown "$USER_UID:$USER_GID" "$BACKUP_DEST"
+
+if [ "$RUN_AS_ROOT" != "true" ]; then
+    chown "$USER_UID:$USER_GID" "$BACKUP_DEST"
+fi
 
 # ----------------------
-# Execute backup as non-root user
+# Execute backup
 # ----------------------
-exec su-exec "$USER_UID:$USER_GID" backup.sh
+if [ "$RUN_AS_ROOT" = "true" ]; then
+    exec backup.sh
+else
+    exec su-exec "$USER_UID:$USER_GID" backup.sh
+fi
