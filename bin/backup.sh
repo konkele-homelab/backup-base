@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
 
-###############################################################################
+# ----------------------
 # Default variables
-###############################################################################
+# ----------------------
 : "${BACKUP_DEST:=/backup}"
 : "${LOG_FILE:=/var/log/backup.log}"
 : "${RUN_LOG:=/tmp/backup_run_$$.log}"
@@ -16,17 +16,17 @@ set -eu
 : "${APP_BACKUP:=/default.sh}"
 : "${DRY_RUN:=false}"
 
-###############################################################################
+# ----------------------
 # Cleanup
-###############################################################################
+# ----------------------
 cleanup() {
     rm -f "$RUN_LOG"
 }
 trap cleanup EXIT
 
-###############################################################################
+# ----------------------
 # Logging
-###############################################################################
+# ----------------------
 log() {
     ts=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[$ts] $*" | tee -a "$LOG_FILE" -a "$RUN_LOG"
@@ -37,9 +37,9 @@ log_error() {
     echo "[$ts] ERROR: $*" | tee -a "$LOG_FILE" -a "$RUN_LOG" >&2
 }
 
-###############################################################################
+# ----------------------
 # Load common backup library
-###############################################################################
+# ----------------------
 COMMON_LIB="/usr/local/lib/backup_common.sh"
 if [ ! -r "$COMMON_LIB" ]; then
     log_error "backup_common.sh not found at $COMMON_LIB"
@@ -47,9 +47,9 @@ if [ ! -r "$COMMON_LIB" ]; then
 fi
 . "$COMMON_LIB"
 
-###############################################################################
+# ----------------------
 # Email
-###############################################################################
+# ----------------------
 send_email() {
     subject="$1"
     status="$2"
@@ -71,16 +71,16 @@ send_email() {
         || log_error "Email send failed"
 }
 
-###############################################################################
+# ----------------------
 # Create snapshot directory
-###############################################################################
+# ----------------------
 TIMESTAMP=$(_now_ts)
 SNAPSHOT_DIR="$BACKUP_DEST/daily/$TIMESTAMP"
 create_snapshot_dir "$SNAPSHOT_DIR"
 
-###############################################################################
+# ----------------------
 # Execute application backup
-###############################################################################
+# ----------------------
 if [ "${APP_BACKUP##*/}" = "default.sh" ]; then
     log "No application backup configured (APP_BACKUP not set)"
     exit 0
@@ -102,6 +102,9 @@ if . "$APP_BACKUP"; then
 
     # Update latest symlink
     update_latest_symlink "daily/$TIMESTAMP"
+
+    # GFS snapshot promotion
+    create_gfs_snapshots "$SNAPSHOT_DIR"
 
     # Apply retention based on configured policy
     apply_retention
